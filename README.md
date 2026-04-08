@@ -1,0 +1,168 @@
+---
+title: Insurance Claim Dispute Resolution
+emoji: "🏥"
+colorFrom: blue
+colorTo: green
+sdk: docker
+app_port: 7860
+---
+
+# Insurance Claim Dispute Resolution
+
+Every year, millions of insurance claims get denied. Some denials are legitimate. A lot of them aren't. They rely on policyholders not knowing their rights, not reading the fine print, or just giving up because fighting an insurance company is exhausting.
+
+This environment simulates that fight. An AI agent takes the role of a policyholder (or their advocate) and argues with a simulated insurer over multiple rounds to recover denied claim amounts. The insurer pushes back, stonewalls, makes lowball offers, and hides behind policy language -- just like the real thing.
+
+The point isn't to train agents to be lawyers. It's to test whether language models can do the kind of structured, adversarial reasoning that insurance disputes actually require: reading a policy, finding the weak point in a denial, knowing when to cite law vs. when to provide evidence vs. when to escalate, and doing it all in the right order.
+
+## The Scenarios
+
+Twelve scenarios across four difficulty tiers, covering six types of insurance. Each one is based on patterns from real disputes.
+
+### Easy -- Clear-cut errors where the insurer is obviously wrong
+
+| ID | Type | Denied | What happened |
+|----|------|--------|---------------|
+| `easy_billing_error` | Health | $3,000 | ER visit denied because the claim was submitted under the wrong billing code. The policy clearly covers emergency visits. Point at the code error, cite the policy, done. |
+| `easy_dental_cleaning` | Dental | $285 | Routine cleaning denied because the insurer miscounted -- they logged a canceled appointment as a completed visit. Records show only one cleaning in the past year. |
+| `easy_auto_glass` | Auto | $850 | Windshield replacement denied as "cosmetic damage." It's a cracked windshield from road debris. Comprehensive coverage explicitly covers glass, and state law requires intact windshields. |
+
+### Medium -- Ambiguous policy language or procedural obstacles
+
+| ID | Type | Denied | What happened |
+|----|------|--------|---------------|
+| `medium_partial_denial` | Health | $8,500 | Knee surgery approved, but the robotic-assisted technique denied as "experimental." Policy covers arthroscopy but is silent on robotic tools. Is the robot a separate procedure or just a tool? |
+| `medium_travel_emergency` | Travel | $12,400 | Emergency appendectomy in Costa Rica denied because the hospital was "out of network." There is no network in Costa Rica. The patient was being wheeled into surgery -- pre-authorization wasn't really an option. |
+| `medium_homeowners_pipe` | Homeowners | $15,800 | Basement water damage from a burst pipe denied as "flood damage." Floods and burst pipes are completely different perils. The policy covers one and not the other, and the insurer picked the wrong one. |
+
+### Hard -- Stubborn insurers, multi-step legal arguments required
+
+| ID | Type | Denied | What happened |
+|----|------|--------|---------------|
+| `hard_full_denial` | Health | $67,000 | Twelve-day hospitalization for a lupus flare denied as a "pre-existing condition." The patient has been continuously covered for 14 months. The ACA has prohibited pre-existing condition exclusions since 2014. The insurer is also challenging the length of stay. |
+| `hard_disability_mental` | Disability | $57,600 | Long-term disability claim for severe depression denied. The insurer says the claimant doesn't meet the definition of "total disability" and is misapplying the 24-month mental health cap to an 8-month claim. Three physicians have documented the functional limitations. |
+| `hard_dental_implant` | Dental | $4,200 | Dental implant denied as cosmetic. The tooth was lost to infection, and the implant prevents bone loss and bite problems. Two providers recommend it as standard of care. The insurer's alternative (a partial denture) would cause long-term damage. |
+
+### Expert -- Complex multi-vector disputes, very stubborn insurers
+
+| ID | Type | Denied | What happened |
+|----|------|--------|---------------|
+| `expert_auto_diminished_value` | Auto | $6,800 | After a not-at-fault collision, the car was repaired but lost $6,800 in resale value due to its accident history. The insurer says diminished value is "speculative." State law disagrees, and dealer appraisals confirm the loss. |
+| `expert_homeowners_mold` | Homeowners | $23,500 | Mold discovered 6 weeks after a covered water heater burst. Water damage was already paid, but mold remediation denied under the mold exclusion. The mold only exists because of the covered event. Ensuing loss doctrine should apply. |
+| `expert_health_balance_billing` | Health | $27,000 | Emergency heart surgery at an in-network hospital, but the assigned surgeon was out-of-network. Surprise balance bill of $27,000. State and federal surprise billing laws should prevent this, but the insurer is misreading the statute. |
+
+## Action Space
+
+The agent picks one of twelve action types per step, along with a free-text argument:
+
+| Action | What it does | When to use it |
+|--------|-------------|----------------|
+| `cite_policy` | Reference specific policy sections | When the policy language supports your case |
+| `provide_evidence` | Submit documentation or records | When you have concrete proof |
+| `escalate` | General escalation (supervisors, complaints) | Mid-to-late game when progress stalls |
+| `request_supervisor` | Ask for a senior reviewer | After initial arguments have been made |
+| `accept_partial` | Accept the current offer, end episode | When the offer is good enough |
+| `reject_offer` | Reject a lowball offer | When you can do better |
+| `request_itemized_bill` | Ask for a detailed charge breakdown | Early game, especially for billing disputes |
+| `file_formal_appeal` | Submit a formal appeal | After building your case with evidence |
+| `cite_precedent` | Reference case law or prior rulings | When legal precedent supports your position |
+| `threaten_regulatory_complaint` | Threaten to involve regulators | Late game nuclear option, penalized if used too early |
+| `provide_medical_records` | Submit medical documentation | When clinical evidence is the key argument |
+| `request_peer_review` | Ask for independent medical review | When the insurer's medical judgment is questionable |
+
+Timing matters. Requesting a supervisor on step 1 is weak. Threatening a regulatory complaint before you've built your case backfires. The environment rewards agents that sequence their actions strategically.
+
+## Observation Space
+
+After each action, the agent receives:
+
+- **Insurer response** -- a text message reacting to the argument, with contextual flavor based on the action taken
+- **Current offer** -- how much the insurer is willing to pay right now
+- **Max recoverable** -- the ceiling for this scenario
+- **Steps remaining** -- how many turns are left (max 8 per episode)
+- **Step reward** -- how much progress this action made
+- **Cumulative reward** -- total progress so far
+
+The insurer's response text gives qualitative signal about how the argument landed. A good agent should read these responses to calibrate its next move.
+
+## Reward Design
+
+The reward function isn't a black box. Here's how it works:
+
+**Per-step reward** = effectiveness * max_recoverable * 0.3, normalized. Each action's effectiveness depends on:
+
+1. **Action-profile match** -- each insurer has different sensitivities. Some respond to policy citations, others to evidence, others to escalation threats. The profile weights (policy_sensitivity, evidence_sensitivity, escalation_sensitivity) determine what works.
+
+2. **Argument relevance** -- the free-text argument is matched against scenario-specific concepts (groups of related terms with synonyms). Hitting the right concepts matters more than verbose arguments.
+
+3. **Timing** -- some actions have multipliers based on the current step. Escalation is weak early and strong late. Requesting an itemized bill is strongest on step 0. Filing a formal appeal scales with how much case you've built.
+
+4. **Repetition penalty** -- using the same action type repeatedly gets diminishing returns (15% penalty per repeat).
+
+5. **Stubbornness** -- each insurer profile has a stubbornness factor that applies a flat penalty to all actions. Easy scenarios have low stubbornness (0.1), expert scenarios have high stubbornness (0.6+).
+
+**Final score** = current_offer / max_recoverable (0.0 to 1.0).
+
+An episode ends when the agent hits 8 steps, accepts a partial offer, or recovers 95%+ of the max recoverable amount.
+
+## Baseline Scores
+
+These are rough baselines to calibrate expectations:
+
+| Strategy | Easy | Medium | Hard | Expert |
+|----------|------|--------|------|--------|
+| Random actions | ~0.15 | ~0.08 | ~0.04 | ~0.02 |
+| Always cite_policy | ~0.45 | ~0.25 | ~0.15 | ~0.08 |
+| Reasonable heuristic agent | ~0.70 | ~0.50 | ~0.35 | ~0.20 |
+| Qwen2.5-72B-Instruct | 0.92 | 0.81 | 0.70 | -- |
+| **Average (Qwen2.5-72B)** | | **0.81** | | |
+
+Measured baselines: `easy_billing_error` 0.92, `medium_partial_denial` 0.81, `hard_full_denial` 0.70, average 0.81. These were run against the live HF Space with the default inference script.
+
+The gap between "reasonable heuristic" and the Qwen baseline is where the interesting work happens. Closing that gap requires understanding the scenario, picking the right strategy, writing relevant arguments, and adapting to insurer feedback.
+
+## Setup
+
+### Local development
+
+```bash
+pip install -r requirements.txt
+uvicorn server.app:app --host 0.0.0.0 --port 8000
+```
+
+In a separate terminal:
+
+```bash
+export HF_TOKEN=your_token
+export ENV_URL=http://localhost:8000
+python inference.py
+```
+
+### Docker
+
+```bash
+docker build -t insurance-claim-env .
+docker run -p 8000:8000 insurance-claim-env
+```
+
+Then run `inference.py` with `ENV_URL=http://localhost:8000`.
+
+### API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/tasks` | List available task IDs |
+| POST | `/reset` | Start a new episode (`{"task_id": "easy_billing_error"}`) |
+| POST | `/step` | Submit an action (`{"action": {"action_type": "cite_policy", "argument": "..."}}`) |
+| GET | `/state` | Get current episode state |
+| GET | `/score` | Get current score (0.0 to 1.0) |
+| GET | `/health` | Health check |
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `API_BASE_URL` | `https://api-inference.huggingface.co/v1` | LLM API endpoint |
+| `MODEL_NAME` | `Qwen/Qwen2.5-72B-Instruct` | Model for inference |
+| `HF_TOKEN` | -- | HuggingFace API token |
+| `ENV_URL` | `http://localhost:8000` | Environment server URL |

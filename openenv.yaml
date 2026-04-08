@@ -1,0 +1,83 @@
+name: insurance-claim-dispute-resolution
+description: >
+  Simulates insurance claim dispute resolution where an agent argues with a
+  simulated insurer to recover denied claim amounts across varying difficulty levels.
+
+tags:
+  - negotiation
+  - insurance
+  - multi-turn
+  - language-agent
+
+tasks:
+  - id: easy_billing_error
+    description: "Health: ER billing code error. Cite the correct policy section to recover $3,000."
+    difficulty: easy
+
+  - id: easy_dental_cleaning
+    description: "Dental: Routine cleaning denied due to miscounted visits. Correct the frequency records to recover $285."
+    difficulty: easy
+
+  - id: easy_auto_glass
+    description: "Auto: Windshield replacement denied as cosmetic. Cite comprehensive coverage and safety law to recover $850."
+    difficulty: easy
+
+  - id: medium_partial_denial
+    description: "Health: Partial denial for robotic-assisted surgery. Argue ambiguous policy language to recover $8,500."
+    difficulty: medium
+
+  - id: medium_travel_emergency
+    description: "Travel: Emergency appendectomy abroad denied as out-of-network. Invoke emergency exception to recover $11,000."
+    difficulty: medium
+
+  - id: medium_homeowners_pipe
+    description: "Homeowners: Burst pipe water damage denied as flood. Distinguish peril types to recover $14,500."
+    difficulty: medium
+
+  - id: hard_full_denial
+    description: "Health: Full denial on pre-existing condition grounds. Multi-step legal argumentation to recover $67,000."
+    difficulty: hard
+
+  - id: hard_disability_mental
+    description: "Disability: Long-term disability for depression denied. Prove functional limitations to recover $50,000."
+    difficulty: hard
+
+  - id: hard_dental_implant
+    description: "Dental: Implant denied as cosmetic. Establish restorative medical necessity to recover $3,800."
+    difficulty: hard
+
+  - id: expert_auto_diminished_value
+    description: "Auto: Diminished value claim denied as speculative. Cite state case law and appraisals to recover $5,500."
+    difficulty: expert
+
+  - id: expert_homeowners_mold
+    description: "Homeowners: Mold remediation denied under exclusion. Argue ensuing loss from covered peril to recover $18,000."
+    difficulty: expert
+
+  - id: expert_health_balance_billing
+    description: "Health: Surprise balance billing for emergency surgery. Cite No Surprises Act to recover $25,000."
+    difficulty: expert
+
+scoring:
+  metric: amount_recovered_ratio
+  range: [0.0, 1.0]
+  description: Score equals amount_recovered / max_recoverable. Partial credit given per step.
+
+server:
+  build:
+    dockerfile: Dockerfile
+  port: 8000
+  endpoints:
+    reset: POST /reset
+    step: POST /step
+    state: GET /state
+    score: GET /score
+    health: GET /health
+
+inference:
+  entrypoint: python inference.py
+  env:
+    - API_BASE_URL
+    - MODEL_NAME
+    - HF_TOKEN
+  default_model: Qwen/Qwen2.5-72B-Instruct
