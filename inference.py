@@ -5,7 +5,7 @@ import sys
 import requests
 from openai import OpenAI
 
-ENV_URL = os.getenv("ENV_URL", "http://localhost:8000")
+ENV_URL = os.getenv("ENV_URL", "https://anishkishore-insurance-claim-env.hf.space")
 API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
 MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
 HF_TOKEN = os.getenv("HF_TOKEN")
@@ -82,9 +82,19 @@ BENCHMARK_NAME = "insurance-claim-dispute-resolution"
 def run_episode(task_id: str):
     client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
 
-    reset_resp = requests.post(f"{ENV_URL}/reset", json={"task_id": task_id})
-    reset_resp.raise_for_status()
-    state = reset_resp.json()
+    try:
+        reset_resp = requests.post(f"{ENV_URL}/reset", json={"task_id": task_id}, timeout=30)
+        reset_resp.raise_for_status()
+        state = reset_resp.json()
+    except requests.ConnectionError:
+        print(f"[ERROR] Cannot connect to environment at {ENV_URL}. Is the server running?", file=sys.stderr)
+        raise
+    except requests.HTTPError as e:
+        print(f"[ERROR] Reset failed for task {task_id}: {e.response.status_code} {e.response.text}", file=sys.stderr)
+        raise
+    except requests.Timeout:
+        print(f"[ERROR] Timeout connecting to {ENV_URL}/reset", file=sys.stderr)
+        raise
 
     print(f"[START] task={task_id} env={BENCHMARK_NAME} model={MODEL_NAME}")
     sys.stdout.flush()
@@ -111,7 +121,8 @@ def run_episode(task_id: str):
             assistant_text = completion.choices[0].message.content
             messages.append({"role": "assistant", "content": assistant_text})
         except Exception as e:
-            error = str(e)
+            error = f"LLM call failed: {e}"
+            print(f"[ERROR] {error}", file=sys.stderr)
             assistant_text = None
 
         if assistant_text is not None:
@@ -124,12 +135,24 @@ def run_episode(task_id: str):
                 step_resp = requests.post(
                     f"{ENV_URL}/step",
                     json={"action": action},
+                    timeout=30,
                 )
                 step_resp.raise_for_status()
                 observation = step_resp.json()
-            except Exception as e:
-                error = str(e)
+            except requests.ConnectionError:
+                error = f"Lost connection to environment at {ENV_URL}/step"
+                print(f"[ERROR] {error}", file=sys.stderr)
                 observation = None
+            except requests.HTTPError as e:
+                error = f"Step failed: {e.response.status_code} {e.response.text}"
+                print(f"[ERROR] {error}", file=sys.stderr)
+                observation = None
+            except requests.Timeout:
+                error = f"Timeout on {ENV_URL}/step"
+                print(f"[ERROR] {error}", file=sys.stderr)
+                observation = None
+        else:
+            action = {"action_type": "cite_policy", "argument": "I dispute this claim denial."}
 
         step += 1
 
@@ -150,9 +173,13 @@ def run_episode(task_id: str):
         if not done and observation is not None:
             messages.append({"role": "user", "content": build_user_prompt(state, observation)})
 
-    score_resp = requests.get(f"{ENV_URL}/score")
-    score_resp.raise_for_status()
-    final = score_resp.json()["score"]
+    try:
+        score_resp = requests.get(f"{ENV_URL}/score", timeout=30)
+        score_resp.raise_for_status()
+        final = score_resp.json()["score"]
+    except Exception as e:
+        print(f"[ERROR] Failed to fetch score: {e}", file=sys.stderr)
+        final = 0.0
 
     success = final > 0.0
     success_str = "true" if success else "false"
@@ -164,9 +191,19 @@ def run_episode(task_id: str):
 
 
 def main():
-    task_ids_resp = requests.get(f"{ENV_URL}/tasks")
-    task_ids_resp.raise_for_status()
-    task_ids = task_ids_resp.json()
+    try:
+        task_ids_resp = requests.get(f"{ENV_URL}/tasks", timeout=30)
+        task_ids_resp.raise_for_status()
+        task_ids = task_ids_resp.json()
+    except requests.ConnectionError:
+        print(f"[ERROR] Cannot connect to environment at {ENV_URL}. Is the server running?", file=sys.stderr)
+        sys.exit(1)
+    except requests.HTTPError as e:
+        print(f"[ERROR] Failed to fetch tasks: {e.response.status_code} {e.response.text}", file=sys.stderr)
+        sys.exit(1)
+    except requests.Timeout:
+        print(f"[ERROR] Timeout connecting to {ENV_URL}/tasks", file=sys.stderr)
+        sys.exit(1)
 
     for task_id in task_ids:
         run_episode(task_id)
