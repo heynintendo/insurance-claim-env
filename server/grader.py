@@ -514,5 +514,6 @@ def generate_insurer_response(
 
 def final_score(state: State) -> float:
     if state.max_recoverable <= 0:
-        return 0.0
-    return state.current_offer / state.max_recoverable
+        return 0.001
+    raw = state.current_offer / state.max_recoverable
+    return max(0.001, min(0.999, raw))
