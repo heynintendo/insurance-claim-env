@@ -1,15 +1,58 @@
+import re
+
 from server.models import Action, ActionType, InsurerResponse, State
+
+
+def _normalize(text: str) -> str:
+    """Replace hyphens/underscores with spaces, lowercase, collapse whitespace."""
+    return re.sub(r"\s+", " ", text.lower().replace("-", " ").replace("_", " ")).strip()
+
+
+def _words_within_proximity(words: list[str], arg_words: list[str], window: int = 5) -> bool:
+    """Check if all words appear within a window of each other in arg_words."""
+    if not words:
+        return False
+    # Find all positions of the first word
+    positions = [i for i, w in enumerate(arg_words) if w == words[0]]
+    for pos in positions:
+        # Check if all remaining words appear within the window
+        window_start = max(0, pos - window)
+        window_end = min(len(arg_words), pos + window + 1)
+        window_slice = arg_words[window_start:window_end]
+        if all(w in window_slice for w in words):
+            return True
+    return False
 
 
 def _concept_match(argument: str, concepts: list[dict]) -> float:
     argument_lower = argument.lower()
+    argument_normalized = _normalize(argument)
+    argument_words = argument_normalized.split()
+
     total_weight = sum(c["weight"] for c in concepts)
     if total_weight == 0:
         return 0.0
 
     score = 0.0
     for concept in concepts:
-        hits = sum(1 for term in concept["terms"] if term in argument_lower)
+        hits = 0.0
+        for term in concept["terms"]:
+            # Layer 0: Exact substring match (original behavior)
+            if term in argument_lower:
+                hits += 1.0
+                continue
+
+            # Layer 1: Normalized match (hyphens/underscores -> spaces)
+            term_normalized = _normalize(term)
+            if term_normalized != term and term_normalized in argument_normalized:
+                hits += 1.0
+                continue
+
+            # Layer 2: Word proximity match (2+ word terms only)
+            term_words = term_normalized.split()
+            if len(term_words) >= 2 and _words_within_proximity(term_words, argument_words):
+                hits += 0.7
+
         if hits > 0:
             concept_score = min(hits / 2, 1.0)
             score += concept_score * concept["weight"]

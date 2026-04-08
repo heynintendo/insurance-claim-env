@@ -178,7 +178,7 @@ Then run `inference.py` with `ENV_URL=http://localhost:8000`.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `API_BASE_URL` | `https://api-inference.huggingface.co/v1` | LLM API endpoint |
+| `API_BASE_URL` | `https://router.huggingface.co/v1` | LLM API endpoint |
 | `MODEL_NAME` | `Qwen/Qwen2.5-72B-Instruct` | Model for inference |
 | `HF_TOKEN` | -- | HuggingFace API token |
 | `ENV_URL` | `http://localhost:8000` | Environment server URL |
