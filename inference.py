@@ -179,9 +179,10 @@ def run_episode(task_id: str):
         final = score_resp.json()["score"]
     except Exception as e:
         print(f"[ERROR] Failed to fetch score: {e}", file=sys.stderr)
-        final = 0.0
+        final = 0.01
 
-    success = final > 0.0
+    final = max(0.01, min(0.99, final))
+    success = final > 0.01
     success_str = "true" if success else "false"
     rewards_str = ",".join(f"{r:.2f}" for r in rewards)
     print(f"[END] success={success_str} steps={step} score={final:.2f} rewards={rewards_str}")

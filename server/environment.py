@@ -65,5 +65,5 @@ class ClaimDisputeEnvironment:
 
     def score(self) -> float:
         if self.state is None:
-            return 0.0
+            return 0.01
         return final_score(self.state)
