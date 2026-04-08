@@ -15,6 +15,16 @@ This environment simulates that fight. An AI agent takes the role of a policyhol
 
 The point isn't to train agents to be lawyers. It's to test whether language models can do the kind of structured, adversarial reasoning that insurance disputes actually require: reading a policy, finding the weak point in a denial, knowing when to cite law vs. when to provide evidence vs. when to escalate, and doing it all in the right order.
 
+## Why This Matters
+
+The insurance claim denial problem is not small. Roughly 17% of in-network claims are denied in the US, and the appeal rate is under 1%. Most people don't appeal because the process is designed to be exhausting. You need to understand your policy, know the relevant regulations, write structured arguments, and keep pushing through multiple rounds of pushback from adjusters who do this for a living.
+
+This is exactly the kind of problem where AI agents could make a real difference. Not by replacing lawyers, but by doing the grunt work of identifying denial errors, citing the right policy sections, and drafting appeal arguments that a human can review and send. The people who get hurt worst by wrongful denials are the ones who can least afford to fight them.
+
+But building agents that can actually do this well is harder than it looks. The agent needs to understand domain-specific terminology -- not just "the ACA prohibits pre-existing condition exclusions" but the specific statutory section (42 USC 300gg-3) that makes the argument stick. It needs to know that threatening a regulatory complaint on step 1 makes you look unserious, but the same threat on step 6 after building a documented case carries real weight. It needs to adapt its strategy based on how the insurer responds, not just blast through a fixed script.
+
+This environment tests all of that. Easy scenarios can be solved with basic policy knowledge. Expert scenarios require the kind of specific legal citations, medical terminology, and regulatory references that separate a good advocate from a great one.
+
 ## The Scenarios
 
 Twelve scenarios across four difficulty tiers, covering six types of insurance. Each one is based on patterns from real disputes.
@@ -87,23 +97,29 @@ The insurer's response text gives qualitative signal about how the argument land
 
 ## Reward Design
 
-The reward function isn't a black box. Here's how it works:
+The reward function isn't a black box. Transparency matters here -- if you're building an agent to argue insurance claims, you need to understand what the environment actually rewards and why.
 
-**Per-step reward** = effectiveness * max_recoverable * 0.3, normalized. Each action's effectiveness depends on:
+**Per-step reward** = effectiveness * max_recoverable * 0.3, normalized. Each action's effectiveness is built up from several factors that mirror what actually works in real insurance disputes:
 
-1. **Action-profile match** -- each insurer has different sensitivities. Some respond to policy citations, others to evidence, others to escalation threats. The profile weights (policy_sensitivity, evidence_sensitivity, escalation_sensitivity) determine what works.
+1. **Action-profile match** -- each insurer has different sensitivities. Some respond to policy citations, others to evidence, others to escalation threats. The profile weights (policy_sensitivity, evidence_sensitivity, escalation_sensitivity) determine what works. This reflects reality: some adjusters care about being technically correct, others respond to pressure, others need clinical documentation. There's no universal winning move.
 
-2. **Argument relevance** -- the free-text argument is matched against scenario-specific concepts (groups of related terms with synonyms). Hitting the right concepts matters more than verbose arguments.
+2. **Argument relevance** -- the free-text argument is matched against scenario-specific concepts (groups of related terms with synonyms). Easy scenarios accept general terms ("emergency", "billing code"). Expert scenarios require precise domain terminology ("42 USC 300gg-3", "IICRC S520 standard", "Mabry formula"). This is the sharpest difficulty lever in the environment. A general LLM can talk about insurance concepts, but producing the exact statutory citation or medical term that moves a stubborn adjuster requires genuine domain knowledge.
 
-3. **Timing** -- some actions have multipliers based on the current step. Escalation is weak early and strong late. Requesting an itemized bill is strongest on step 0. Filing a formal appeal scales with how much case you've built.
+3. **Timing** -- some actions have multipliers based on the current step. Escalation is weak early and strong late. Requesting an itemized bill is strongest on step 0. Filing a formal appeal scales with how much case you've built. This isn't arbitrary -- it mirrors the real process. You don't threaten to call the insurance commissioner before you've even cited the policy. And requesting an itemized bill after 6 rounds of arguing is too late.
 
-4. **Repetition penalty** -- using the same action type repeatedly gets diminishing returns (15% penalty per repeat).
+4. **Strategy sequencing** -- the environment tracks whether actions follow a logical progression through three phases: evidence-building (cite policy, provide evidence), escalation (request supervisor, cite precedent), and nuclear options (formal appeal, regulatory complaint). Following this natural order earns a 15% effectiveness bonus. Skipping straight to threats without building your case gets no bonus. Real insurance disputes work the same way -- adjusters take you more seriously when your escalation is backed by a documented trail of evidence.
 
-5. **Stubbornness** -- each insurer profile has a stubbornness factor that applies a flat penalty to all actions. Easy scenarios have low stubbornness (0.1), expert scenarios have high stubbornness (0.6+).
+5. **Argument detail** -- short, lazy arguments (<20 characters) get a 10% penalty. Detailed arguments get bonuses: 10% at 100+ characters, 15% at 200+, and 20% at 300+. This rewards agents that actually articulate their reasoning rather than sending "I disagree" and hoping for the best. In real disputes, the quality and specificity of your written argument is often the difference between a denial upheld and a denial overturned.
+
+6. **Repetition penalty** -- using the same action type repeatedly gets diminishing returns (15% penalty per repeat). Real adjusters stop listening when you make the same argument three times.
+
+7. **Stubbornness** -- each insurer profile has a stubbornness factor that applies a flat penalty to all actions. Easy scenarios have low stubbornness (0.1), hard scenarios have high stubbornness (0.7), and expert scenarios are very high (0.85-0.9). This is the blunt difficulty knob -- stubborn insurers just don't move much per step, so you need every other factor working in your favor.
 
 **Final score** = current_offer / max_recoverable (0.0 to 1.0).
 
 An episode ends when the agent hits 8 steps, accepts a partial offer, or recovers 95%+ of the max recoverable amount.
+
+The design philosophy is that scoring well on easy scenarios should be achievable with basic prompt engineering. Scoring well on expert scenarios should require either fine-tuning on insurance domain knowledge or retrieval-augmented generation with access to legal databases. The gap between those two is where the interesting agent architecture decisions live.
 
 ## Baseline Scores
 

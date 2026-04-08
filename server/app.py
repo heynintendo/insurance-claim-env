@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, PlainTextResponse
 from server.models import ResetRequest, StepRequest, State, Observation
@@ -6,6 +8,16 @@ from server.scenarios import list_task_ids, SCENARIOS
 
 app = FastAPI(title="Insurance Claim Dispute Resolution Environment")
 env = ClaimDisputeEnvironment()
+
+# In-memory metrics (resets on server restart)
+_metrics = {
+    "episodes": 0,
+    "scores_by_difficulty": defaultdict(list),
+    "action_counts": defaultdict(int),
+    "steps_per_episode": [],
+    "_current_steps": 0,
+    "_current_difficulty": None,
+}
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -185,6 +197,11 @@ def root():
       </tr>
       <tr>
         <td><span class="method method-get">GET</span></td>
+        <td><code>/metrics</code></td>
+        <td>Usage metrics: episodes run, avg scores by difficulty, action counts, avg steps</td>
+      </tr>
+      <tr>
+        <td><span class="method method-get">GET</span></td>
         <td><code>/health</code></td>
         <td>Health check</td>
       </tr>
@@ -207,18 +224,43 @@ def get_tasks() -> list[str]:
 
 @app.post("/reset")
 def reset(request: ResetRequest = ResetRequest()) -> State:
+    # Finalize previous episode metrics if one was in progress
+    if _metrics["_current_difficulty"] is not None and _metrics["_current_steps"] > 0:
+        _metrics["steps_per_episode"].append(_metrics["_current_steps"])
+        score = env.score()
+        _metrics["scores_by_difficulty"][_metrics["_current_difficulty"]].append(score)
+        _metrics["episodes"] += 1
+
     try:
-        return env.reset(task_id=request.task_id)
+        state = env.reset(task_id=request.task_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+    _metrics["_current_steps"] = 0
+    _metrics["_current_difficulty"] = state.difficulty
+    return state
 
 
 @app.post("/step")
 def step(request: StepRequest) -> Observation:
     try:
-        return env.step(request.action)
+        obs = env.step(request.action)
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+    _metrics["action_counts"][request.action.action_type.value] += 1
+    _metrics["_current_steps"] += 1
+
+    if obs.done:
+        _metrics["steps_per_episode"].append(_metrics["_current_steps"])
+        _metrics["scores_by_difficulty"][_metrics["_current_difficulty"]].append(
+            env.score()
+        )
+        _metrics["episodes"] += 1
+        _metrics["_current_steps"] = 0
+        _metrics["_current_difficulty"] = None
+
+    return obs
 
 
 @app.get("/state")
@@ -276,6 +318,27 @@ def get_transcript():
     lines.append(f"Steps used: {state.step} / {state.max_steps}")
 
     return "\n".join(lines)
+
+
+@app.get("/metrics")
+def get_metrics() -> dict:
+    avg_by_difficulty = {}
+    for diff, scores in _metrics["scores_by_difficulty"].items():
+        avg_by_difficulty[diff] = round(sum(scores) / len(scores), 4) if scores else 0.0
+
+    action_counts = dict(
+        sorted(_metrics["action_counts"].items(), key=lambda x: x[1], reverse=True)
+    )
+
+    steps = _metrics["steps_per_episode"]
+    avg_steps = round(sum(steps) / len(steps), 2) if steps else 0.0
+
+    return {
+        "total_episodes": _metrics["episodes"],
+        "average_score_by_difficulty": avg_by_difficulty,
+        "action_counts": action_counts,
+        "average_steps_per_episode": avg_steps,
+    }
 
 
 @app.get("/health")

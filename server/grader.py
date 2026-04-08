@@ -93,6 +93,42 @@ def _action_effectiveness(action: Action, profile: dict, state: State) -> float:
     if repeated_actions > 0:
         effectiveness *= max(0.5, 1.0 - 0.15 * repeated_actions)
 
+    # Strategy sequencing bonus: reward logical progression through phases.
+    # Phase 1 (early): cite_policy, provide_evidence, request_itemized_bill, provide_medical_records
+    # Phase 2 (mid):   escalate, request_supervisor, cite_precedent, request_peer_review
+    # Phase 3 (late):  file_formal_appeal, threaten_regulatory_complaint
+    _PHASE = {
+        "cite_policy": 1, "provide_evidence": 1,
+        "request_itemized_bill": 1, "provide_medical_records": 1,
+        "escalate": 2, "request_supervisor": 2,
+        "cite_precedent": 2, "request_peer_review": 2,
+        "file_formal_appeal": 3, "threaten_regulatory_complaint": 3,
+    }
+    current_phase = _PHASE.get(action.action_type.value, 0)
+    if current_phase > 0 and state.history:
+        prior_phases = [
+            _PHASE.get(h.get("action_type", ""), 0) for h in state.history
+        ]
+        prior_phases = [p for p in prior_phases if p > 0]
+        if prior_phases:
+            max_prior = max(prior_phases)
+            has_phase_1 = any(p == 1 for p in prior_phases)
+            # Bonus: current phase >= max prior (not jumping ahead) AND
+            # phase 1 groundwork was laid before escalating
+            if current_phase >= max_prior and (current_phase == 1 or has_phase_1):
+                effectiveness *= 1.15
+
+    # Argument detail bonus/penalty based on length.
+    arg_len = len(action.argument.strip())
+    if arg_len < 20:
+        effectiveness *= 0.9
+    elif arg_len >= 300:
+        effectiveness *= 1.2
+    elif arg_len >= 200:
+        effectiveness *= 1.15
+    elif arg_len >= 100:
+        effectiveness *= 1.1
+
     return min(effectiveness, 1.0)
 
 
