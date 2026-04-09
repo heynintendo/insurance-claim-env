@@ -1,6 +1,6 @@
 from server.models import Action, ActionType, Observation, State
 from server.scenarios import get_insurer_profile, get_scenario, list_task_ids
-from server.grader import compute_step_reward, final_score, generate_insurer_response
+from server.grader import compute_step_reward, extract_objection, final_score, generate_insurer_response
 
 
 class ClaimDisputeEnvironment:
@@ -46,6 +46,25 @@ class ClaimDisputeEnvironment:
             "insurer_message": insurer_response.message,
             "offer_amount": insurer_response.offer_amount,
         })
+
+        # Update insurer frustration based on action tone.
+        _AGGRESSIVE_ACTIONS = {
+            ActionType.ESCALATE, ActionType.THREATEN_REGULATORY_COMPLAINT,
+            ActionType.REQUEST_SUPERVISOR,
+        }
+        _CALM_ACTIONS = {
+            ActionType.CITE_POLICY, ActionType.PROVIDE_EVIDENCE,
+            ActionType.PROVIDE_MEDICAL_RECORDS,
+        }
+        if action.action_type in _AGGRESSIVE_ACTIONS:
+            self.state.insurer_frustration = min(1.0, self.state.insurer_frustration + 0.15)
+        elif action.action_type in _CALM_ACTIONS:
+            self.state.insurer_frustration = max(0.0, self.state.insurer_frustration - 0.05)
+
+        # Extract the insurer's current objection for next step's bonus/penalty.
+        self.state.current_objection = extract_objection(
+            action.argument, self.profile["concepts"]
+        )
 
         return Observation(
             step=self.state.step,

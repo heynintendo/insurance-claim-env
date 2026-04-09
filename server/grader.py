@@ -172,7 +172,63 @@ def _action_effectiveness(action: Action, profile: dict, state: State) -> float:
     elif arg_len >= 100:
         effectiveness *= 1.1
 
+    # Keyword stuffing penalty: if the ratio of matched concept terms to
+    # total word count is suspiciously high, penalize effectiveness.
+    arg_words = action.argument.lower().split()
+    word_count = len(arg_words)
+    if word_count > 0:
+        matched_term_count = sum(
+            1 for c in profile["concepts"] for term in c["terms"]
+            if term in action.argument.lower()
+        )
+        stuffing_ratio = matched_term_count / word_count
+        if stuffing_ratio > 0.3:
+            effectiveness *= 0.7
+
+    # Insurer frustration modifier: high frustration penalizes, low frustration helps.
+    frustration = state.insurer_frustration
+    if frustration > 0.7:
+        effectiveness *= 0.85
+    elif frustration < 0.3:
+        effectiveness *= 1.1
+
+    # Objection response bonus/penalty: reward addressing the insurer's last objection.
+    if state.current_objection and state.history:
+        arg_lower = action.argument.lower()
+        # Find the objection concept in the profile
+        objection_concept = None
+        for c in profile["concepts"]:
+            if c["name"] == state.current_objection:
+                objection_concept = c
+                break
+        if objection_concept is not None:
+            hits = sum(1 for t in objection_concept["terms"] if t in arg_lower)
+            if hits > 0:
+                effectiveness *= 1.2
+            else:
+                # Check if the agent addressed ANY concept at all
+                any_hit = any(
+                    t in arg_lower for c in profile["concepts"] for t in c["terms"]
+                )
+                if not any_hit:
+                    effectiveness *= 0.9
+
     return min(effectiveness, 1.0)
+
+
+def extract_objection(argument: str, concepts: list[dict]) -> str:
+    """Return the name of the concept least addressed by the argument."""
+    arg_lower = argument.lower()
+    worst_name = ""
+    worst_score = float("inf")
+    for c in concepts:
+        hits = sum(1 for t in c["terms"] if t in arg_lower)
+        # Weight by concept importance — high-weight concepts are stronger objections
+        score = hits / max(len(c["terms"]), 1)
+        if score < worst_score:
+            worst_score = score
+            worst_name = c["name"]
+    return worst_name
 
 
 def compute_step_reward(action: Action, profile: dict, state: State) -> tuple[float, float]:

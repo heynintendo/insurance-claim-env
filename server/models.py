@@ -53,6 +53,8 @@ class State(BaseModel):
     history: list[dict] = Field(default_factory=list)
     cumulative_reward: float = 0.0
     difficulty: str = "easy"
+    insurer_frustration: float = 0.0
+    current_objection: str = ""
 
 
 class ResetRequest(BaseModel):

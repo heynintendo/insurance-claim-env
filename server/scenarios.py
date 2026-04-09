@@ -18,6 +18,7 @@ SCENARIOS: dict[str, dict] = {
         "denied_amount": 3000.0,
         "max_recoverable": 3000.0,
         "difficulty": "easy",
+        "max_steps": 6,
         "personality": "bureaucratic",
         "insurer_profile": {
             "stubbornness": 0.1,
@@ -69,6 +70,7 @@ SCENARIOS: dict[str, dict] = {
         "denied_amount": 285.0,
         "max_recoverable": 285.0,
         "difficulty": "easy",
+        "max_steps": 6,
         "personality": "reasonable",
         "insurer_profile": {
             "stubbornness": 0.1,
@@ -121,6 +123,7 @@ SCENARIOS: dict[str, dict] = {
         "denied_amount": 850.0,
         "max_recoverable": 850.0,
         "difficulty": "easy",
+        "max_steps": 6,
         "personality": "passive_aggressive",
         "insurer_profile": {
             "stubbornness": 0.15,
@@ -177,6 +180,7 @@ SCENARIOS: dict[str, dict] = {
         "denied_amount": 8500.0,
         "max_recoverable": 8500.0,
         "difficulty": "medium",
+        "max_steps": 8,
         "personality": "bureaucratic",
         "insurer_profile": {
             "stubbornness": 0.3,
@@ -234,6 +238,7 @@ SCENARIOS: dict[str, dict] = {
         "denied_amount": 12400.0,
         "max_recoverable": 11000.0,
         "difficulty": "medium",
+        "max_steps": 8,
         "personality": "aggressive",
         "insurer_profile": {
             "stubbornness": 0.3,
@@ -289,6 +294,7 @@ SCENARIOS: dict[str, dict] = {
         "denied_amount": 15800.0,
         "max_recoverable": 14500.0,
         "difficulty": "medium",
+        "max_steps": 8,
         "personality": "passive_aggressive",
         "insurer_profile": {
             "stubbornness": 0.25,
@@ -349,6 +355,7 @@ SCENARIOS: dict[str, dict] = {
         "denied_amount": 67000.0,
         "max_recoverable": 67000.0,
         "difficulty": "hard",
+        "max_steps": 10,
         "personality": "aggressive",
         "insurer_profile": {
             "stubbornness": 0.7,
@@ -421,6 +428,7 @@ SCENARIOS: dict[str, dict] = {
         "denied_amount": 57600.0,
         "max_recoverable": 50000.0,
         "difficulty": "hard",
+        "max_steps": 10,
         "personality": "passive_aggressive",
         "insurer_profile": {
             "stubbornness": 0.7,
@@ -491,6 +499,7 @@ SCENARIOS: dict[str, dict] = {
         "denied_amount": 4200.0,
         "max_recoverable": 3800.0,
         "difficulty": "hard",
+        "max_steps": 10,
         "personality": "reasonable",
         "insurer_profile": {
             "stubbornness": 0.7,
@@ -565,6 +574,7 @@ SCENARIOS: dict[str, dict] = {
         "denied_amount": 6800.0,
         "max_recoverable": 5500.0,
         "difficulty": "expert",
+        "max_steps": 12,
         "personality": "aggressive",
         "insurer_profile": {
             "stubbornness": 0.85,
@@ -637,6 +647,7 @@ SCENARIOS: dict[str, dict] = {
         "denied_amount": 23500.0,
         "max_recoverable": 18000.0,
         "difficulty": "expert",
+        "max_steps": 12,
         "personality": "bureaucratic",
         "insurer_profile": {
             "stubbornness": 0.9,
@@ -709,6 +720,7 @@ SCENARIOS: dict[str, dict] = {
         "denied_amount": 27000.0,
         "max_recoverable": 25000.0,
         "difficulty": "expert",
+        "max_steps": 12,
         "personality": "passive_aggressive",
         "insurer_profile": {
             "stubbornness": 0.85,
@@ -779,6 +791,7 @@ def get_scenario(task_id: str) -> State:
         max_recoverable=s["max_recoverable"],
         current_offer=0.0,
         step=0,
+        max_steps=s.get("max_steps", 8),
         difficulty=s["difficulty"],
     )
 

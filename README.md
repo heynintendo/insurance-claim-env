@@ -123,19 +123,32 @@ The design philosophy is that scoring well on easy scenarios should be achievabl
 
 ## Baseline Scores
 
-These are rough baselines to calibrate expectations:
+These are measured baselines to calibrate expectations. "Always cite_policy" sends a short generic argument with the same action every step. "Heuristic agent" cycles through varied actions with a decent (but non-expert) argument.
 
 | Strategy | Easy | Medium | Hard | Expert |
 |----------|------|--------|------|--------|
-| Random actions | ~0.15 | ~0.08 | ~0.04 | ~0.02 |
-| Always cite_policy | ~0.45 | ~0.25 | ~0.15 | ~0.08 |
-| Reasonable heuristic agent | ~0.70 | ~0.50 | ~0.35 | ~0.20 |
-| Qwen2.5-72B-Instruct | 0.92 | 0.81 | 0.70 | -- |
-| **Average (Qwen2.5-72B)** | | **0.81** | | |
+| Always cite_policy (lazy) | 0.57 | 0.39 | 0.15 | 0.05 |
+| Heuristic agent (varied actions) | 0.73 | 0.61 | 0.45 | 0.27 |
+| Target (strong LLM with domain knowledge) | 0.90+ | 0.75+ | 0.60+ | 0.40+ |
 
-Measured baselines: `easy_billing_error` 0.92, `medium_partial_denial` 0.81, `hard_full_denial` 0.70, average 0.81. These were run against the live HF Space with the default inference script.
+Per-scenario breakdown (heuristic agent):
 
-The gap between "reasonable heuristic" and the Qwen baseline is where the interesting work happens. Closing that gap requires understanding the scenario, picking the right strategy, writing relevant arguments, and adapting to insurer feedback.
+| Tier | Scenario | Score |
+|------|----------|-------|
+| Easy | `easy_billing_error` | 0.99 |
+| Easy | `easy_dental_cleaning` | 0.64 |
+| Easy | `easy_auto_glass` | 0.55 |
+| Medium | `medium_partial_denial` | 0.71 |
+| Medium | `medium_travel_emergency` | 0.56 |
+| Medium | `medium_homeowners_pipe` | 0.57 |
+| Hard | `hard_full_denial` | 0.58 |
+| Hard | `hard_disability_mental` | 0.44 |
+| Hard | `hard_dental_implant` | 0.34 |
+| Expert | `expert_auto_diminished_value` | 0.28 |
+| Expert | `expert_homeowners_mold` | 0.23 |
+| Expert | `expert_health_balance_billing` | 0.31 |
+
+The difficulty gradient is sharp. Easy scenarios are solvable with generic arguments. Expert scenarios require specific statutory citations, case law references, and domain terminology that general-purpose LLMs rarely produce without retrieval augmentation.
 
 ## Setup
 
